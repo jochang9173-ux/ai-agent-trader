@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     AZURE_OPENAI_API_VERSION: str = "2024-02-15-preview"
     AZURE_OPENAI_DEPLOYMENT_NAME: str = "gpt-4.1"
 
+    # Google Gemini settings
+    GOOGLE_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-pro"
+
     # Additional .env settings
     REDIS_URL: Optional[str] = None
     BACKEND_URL: Optional[str] = None

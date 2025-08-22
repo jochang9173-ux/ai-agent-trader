@@ -46,8 +46,26 @@ flowchart TD
 ## Quick Start
 
 ### Install Dependencies
+
 ```bash
 make install
+```
+
+### Environment Setup
+Copy and configure your `.env` file:
+```bash
+cp .env.example .env
+```
+
+**Switch LLM Provider**: Edit `.env` and comment/uncomment the API keys:
+```env
+# Use Azure OpenAI (default)
+AZURE_OPENAI_API_KEY=your_key
+# GOOGLE_API_KEY=your_key  # comment out
+
+# Use Google Gemini instead
+# AZURE_OPENAI_API_KEY=your_key  # comment out  
+GOOGLE_API_KEY=your_key
 ```
 
 ### Development Mode
