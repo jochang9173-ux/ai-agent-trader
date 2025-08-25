@@ -74,7 +74,7 @@ def get_llm_client(
     
     if provider == "gemini":
         return ChatGoogleGenerativeAI(
-            model="gemini-pro",
+            model=settings.GEMINI_MODEL,
             temperature=temperature,
             max_output_tokens=max_tokens,
             google_api_key=os.getenv("GOOGLE_API_KEY"),
@@ -105,7 +105,7 @@ class LLMClientConfig:
         api_key: Optional[str] = None,
         # Gemini specific
         google_api_key: Optional[str] = None,
-        model: str = "gemini-pro",
+        model: str = None,
         # Common parameters
         temperature: float = 0.1,
         max_tokens: int = 4000,
@@ -121,7 +121,7 @@ class LLMClientConfig:
         
         # Gemini configuration
         self.google_api_key = google_api_key or os.getenv("GOOGLE_API_KEY")
-        self.model = model
+        self.model = model or settings.GEMINI_MODEL
         
         # Common parameters
         self.temperature = temperature

@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     # Google Gemini settings
     GOOGLE_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-pro"
+    GEMINI_MODEL: str = "gemini-2.5-flash"
 
     # Additional .env settings
     REDIS_URL: Optional[str] = None
