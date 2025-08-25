@@ -223,18 +223,21 @@ async def stream_llm_backtest(
                     llm_decisions = []
                     if hasattr(strategy, "decision_log"):
                         for log_entry in strategy.decision_log:
+                            # 安全處理 decision，確保不會對 None 調用 .get()
+                            decision = log_entry.get("decision", {})
+                            if decision is None:
+                                decision = {}
+                            
                             llm_decisions.append(
                                 {
                                     "timestamp": log_entry["date"].isoformat()
                                     if hasattr(log_entry["date"], "isoformat")
                                     else str(log_entry["date"]),
-                                    "decision": log_entry.get("decision", {}),
+                                    "decision": decision,
                                     "reasoning": log_entry.get("reasoning", ""),
                                     "events": log_entry.get("events", []),
                                     "action": "THINK",  # LLM 思考決策，非交易信號
-                                    "confidence": log_entry.get("decision", {}).get(
-                                        "confidence", 0.8
-                                    ),
+                                    "confidence": decision.get("confidence", 0.8),
                                     "price": 0.0,  # 這將在前端根據時間戳查找對應價格
                                 }
                             )
