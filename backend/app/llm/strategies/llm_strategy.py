@@ -13,11 +13,11 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+from ...utils.backtest_logger import BacktestLogger
 from ...utils.indicators import calculate_bollinger_bands, calculate_macd
 from ...utils.unrealized_pnl_tracker import UnrealizedPnLTracker
-from ...utils.backtest_logger import BacktestLogger
-from ..analysis.trend_analyzer import EnhancedTrendAnalyzer
 from ..analysis.enhanced_technical_analyzer import EnhancedTechnicalAnalyzer
+from ..analysis.trend_analyzer import EnhancedTrendAnalyzer
 from ..client import get_llm_client
 from .base import (
     ParameterSpec,
@@ -53,10 +53,10 @@ class LLMSmartStrategy(TradingStrategy):
         )  # 降低到0.6，增加執行機會
         self.trend_lookback = config.parameters.get("trend_lookback", 20)
         self.event_threshold = config.parameters.get("event_threshold", 0.05)
-        
+
         # 策略類型選擇 - 預設使用traditional
         self.strategy_type = config.parameters.get("strategy_type", "traditional")
-        
+
         # 載入決策原則
         self._load_strategy_prompt()
         self.max_daily_trades = config.parameters.get("max_daily_trades", 3)
@@ -126,11 +126,13 @@ class LLMSmartStrategy(TradingStrategy):
 
         # 風險控制相關
         self._last_trend_analysis = None  # 儲存最新趨勢分析供風險檢查使用
-        
+
         # Backtest logger initialization
         self.backtest_logger = None
         if config.parameters.get("enable_logging", True):
-            log_path = config.parameters.get("log_path", "backend/data/backtest_logs.db")
+            log_path = config.parameters.get(
+                "log_path", "backend/data/backtest_logs.db"
+            )
             session_id = config.parameters.get("session_id", None)
             self.backtest_logger = BacktestLogger(log_path, session_id)
             logger.info(f"✅ Backtest logger enabled: {log_path}")
@@ -141,19 +143,19 @@ class LLMSmartStrategy(TradingStrategy):
             # 確定當前文件的路徑
             current_dir = os.path.dirname(os.path.abspath(__file__))
             prompt_dir = os.path.join(current_dir, "prompt")
-            
+
             # 使用traditional策略文件
             file_path = os.path.join(prompt_dir, "traditional_strategy.md")
-            
+
             # 讀取策略文件
             if os.path.exists(file_path):
-                with open(file_path, 'r', encoding='utf-8') as f:
+                with open(file_path, "r", encoding="utf-8") as f:
                     self.strategy_prompt = f.read()
                 logger.info(f"✅ 成功載入traditional策略: {file_path}")
             else:
                 logger.warning(f"⚠️ 策略文件不存在: {file_path}，使用默認策略")
                 self.strategy_prompt = self._get_default_strategy_prompt()
-                
+
         except Exception as e:
             logger.error(f"❌ 載入策略文件失敗: {e}，使用默認策略")
             self.strategy_prompt = self._get_default_strategy_prompt()
@@ -564,7 +566,8 @@ class LLMSmartStrategy(TradingStrategy):
                 if self.current_position and trend_analysis.dominant_trend == "uptrend":
                     # 檢查是否有長黑K棒或其他強烈出場信號
                     has_large_drop = any(
-                        event.get("event_type") == "LARGE_DROP" for event in relevant_events
+                        event.get("event_type") == "LARGE_DROP"
+                        for event in relevant_events
                     )
                     has_strong_exit_signal = any(
                         event.get("severity") == "high" for event in relevant_events
@@ -600,7 +603,8 @@ class LLMSmartStrategy(TradingStrategy):
                     elif trend_analysis.dominant_trend == "uptrend":
                         # 持倉 + 上升趨勢：只有遇到長黑K棒才需要LLM判斷
                         has_large_drop = any(
-                            event["event_type"] == "LARGE_DROP" for event in relevant_events
+                            event["event_type"] == "LARGE_DROP"
+                            for event in relevant_events
                         )
                         if has_large_drop:
                             skip_llm = False
@@ -615,7 +619,8 @@ class LLMSmartStrategy(TradingStrategy):
                     if trend_analysis.dominant_trend == "downtrend":
                         # 空倉 + 下跌趨勢：僅在有強烈反轉信號時呼叫 LLM
                         has_reversal_signal = any(
-                            event.get("event_type") in ["REVERSAL_PATTERN", "SUPPORT_BOUNCE"]
+                            event.get("event_type")
+                            in ["REVERSAL_PATTERN", "SUPPORT_BOUNCE"]
                             for event in relevant_events
                         )
                         if has_reversal_signal:
@@ -638,7 +643,8 @@ class LLMSmartStrategy(TradingStrategy):
                             for event in relevant_events
                         )
                         has_strong_reversal = any(
-                            event.get("event_type") in ["BB_LOWER_TOUCH", "BB_UPPER_TOUCH"]
+                            event.get("event_type")
+                            in ["BB_LOWER_TOUCH", "BB_UPPER_TOUCH"]
                             and event.get("severity") in ["high", "very_high"]
                             for event in relevant_events
                         )
@@ -648,7 +654,8 @@ class LLMSmartStrategy(TradingStrategy):
                             for event in relevant_events
                         )
                         has_ma_signal = any(
-                            event.get("event_type") in ["MA_GOLDEN_CROSS", "MA_DEATH_CROSS"]
+                            event.get("event_type")
+                            in ["MA_GOLDEN_CROSS", "MA_DEATH_CROSS"]
                             for event in relevant_events
                         )
                         has_multiple_signals = (
@@ -664,7 +671,9 @@ class LLMSmartStrategy(TradingStrategy):
                             or has_multiple_signals
                         ):
                             skip_llm = False
-                            signal_types = [event["event_type"] for event in relevant_events]
+                            signal_types = [
+                                event["event_type"] for event in relevant_events
+                            ]
                             print(
                                 f"✅ 震盪市場檢測到技術信號 {signal_types}，呼叫LLM分析機會"
                             )
@@ -679,7 +688,9 @@ class LLMSmartStrategy(TradingStrategy):
                 if skip_llm:
                     # 不呼叫 LLM，但記錄事件和原因
                     self.llm_skipped_count += 1  # 增加跳過計數器
-                    event_summary = ", ".join([e["event_type"] for e in relevant_events])
+                    event_summary = ", ".join(
+                        [e["event_type"] for e in relevant_events]
+                    )
                     skip_msg = f"⏭️ {timestamp.strftime('%Y-%m-%d')} {skip_reason} (檢測到事件: {event_summary})"
                     print(skip_msg)
 
@@ -776,7 +787,9 @@ class LLMSmartStrategy(TradingStrategy):
                         relevant_events=relevant_events,
                         trend_analysis=current_trend_analysis,
                         llm_decision=llm_decision,
-                        comprehensive_context=getattr(self, 'current_comprehensive_context', None)
+                        comprehensive_context=getattr(
+                            self, "current_comprehensive_context", None
+                        ),
                     )
 
                 if llm_decision and llm_decision.get("action") in ["BUY", "SELL"]:
@@ -799,10 +812,12 @@ class LLMSmartStrategy(TradingStrategy):
                             self.daily_trade_count += 1
                             signal_msg = f"✅ 生成交易信號: {signal.signal_type} (信心度: {confidence:.2f} >= 門檻: {self.confidence_threshold:.2f})"
                             print(signal_msg)
-                            
+
                             # 記錄交易信號到日誌
                             if self.backtest_logger:
-                                self._log_trading_signal(timestamp, signal, llm_decision)
+                                self._log_trading_signal(
+                                    timestamp, signal, llm_decision
+                                )
 
                             # 計算當前P&L狀態用於前端顯示
                             pnl_data = {}
@@ -1730,14 +1745,18 @@ class LLMSmartStrategy(TradingStrategy):
             events.append(
                 {
                     "event_type": "MACD_GOLDEN_CROSS",
-                    "severity": "high" if current["macd_histogram"] > 0.01 else "medium",
+                    "severity": "high"
+                    if current["macd_histogram"] > 0.01
+                    else "medium",
                     "description": "MACD金叉信號",
                     "technical_data": {
                         "indicator": "MACD_GOLDEN_CROSS",
                         "value": None,
                         "threshold": None,
-                        "strength": "high" if current["macd_histogram"] > 0.01 else "medium"
-                    }
+                        "strength": "high"
+                        if current["macd_histogram"] > 0.01
+                        else "medium",
+                    },
                 }
             )
         elif (
@@ -1747,14 +1766,18 @@ class LLMSmartStrategy(TradingStrategy):
             events.append(
                 {
                     "event_type": "MACD_DEATH_CROSS",
-                    "severity": "high" if current["macd_histogram"] < -0.01 else "medium",
+                    "severity": "high"
+                    if current["macd_histogram"] < -0.01
+                    else "medium",
                     "description": "MACD死叉信號",
                     "technical_data": {
                         "indicator": "MACD_DEATH_CROSS",
                         "value": None,
                         "threshold": None,
-                        "strength": "high" if current["macd_histogram"] < -0.01 else "medium"
-                    }
+                        "strength": "high"
+                        if current["macd_histogram"] < -0.01
+                        else "medium",
+                    },
                 }
             )
 
@@ -1769,8 +1792,8 @@ class LLMSmartStrategy(TradingStrategy):
                         "indicator": "BB_LOWER_TOUCH",
                         "value": None,
                         "threshold": None,
-                        "strength": "high"
-                    }
+                        "strength": "high",
+                    },
                 }
             )
         elif (
@@ -1785,36 +1808,38 @@ class LLMSmartStrategy(TradingStrategy):
                         "indicator": "BB_UPPER_TOUCH",
                         "value": None,
                         "threshold": None,
-                        "strength": "high"
-                    }
+                        "strength": "high",
+                    },
                 }
             )
 
         # 成交量分析事件
         if len(data) >= 10:
-            recent_volume = data['volume'].tail(10).mean()
-            if current.get('volume', 0) > recent_volume * 2:
+            recent_volume = data["volume"].tail(10).mean()
+            if current.get("volume", 0) > recent_volume * 2:
                 events.append(
                     {
                         "event_type": "VOLUME_SPIKE",
                         "severity": "medium",
-                        "description": f"成交量爆增 ({current.get('volume', 0)/recent_volume:.1f}倍)",
+                        "description": f"成交量爆增 ({current.get('volume', 0) / recent_volume:.1f}倍)",
                         "technical_data": {
                             "indicator": "VOLUME_SPIKE",
-                            "current_volume": int(current.get('volume', 0)),
+                            "current_volume": int(current.get("volume", 0)),
                             "avg_volume": int(recent_volume),
-                            "ratio": float(current.get('volume', 0)/recent_volume),
-                            "strength": "high" if current.get('volume', 0) > recent_volume * 3 else "medium"
-                        }
+                            "ratio": float(current.get("volume", 0) / recent_volume),
+                            "strength": "high"
+                            if current.get("volume", 0) > recent_volume * 3
+                            else "medium",
+                        },
                     }
                 )
 
         # 價格突破檢測
         if len(data) >= 20:
-            high_20 = data['high'].tail(20).max()
-            low_20 = data['low'].tail(20).min()
-            
-            if current['close'] > high_20 and prev['close'] <= high_20:
+            high_20 = data["high"].tail(20).max()
+            low_20 = data["low"].tail(20).min()
+
+            if current["close"] > high_20 and prev["close"] <= high_20:
                 events.append(
                     {
                         "event_type": "PRICE_BREAKOUT_HIGH",
@@ -1823,12 +1848,12 @@ class LLMSmartStrategy(TradingStrategy):
                         "technical_data": {
                             "indicator": "PRICE_BREAKOUT_HIGH",
                             "breakout_level": float(high_20),
-                            "current_price": float(current['close']),
-                            "strength": "high"
-                        }
+                            "current_price": float(current["close"]),
+                            "strength": "high",
+                        },
                     }
                 )
-            elif current['close'] < low_20 and prev['close'] >= low_20:
+            elif current["close"] < low_20 and prev["close"] >= low_20:
                 events.append(
                     {
                         "event_type": "PRICE_BREAKDOWN_LOW",
@@ -1837,9 +1862,9 @@ class LLMSmartStrategy(TradingStrategy):
                         "technical_data": {
                             "indicator": "PRICE_BREAKDOWN_LOW",
                             "breakdown_level": float(low_20),
-                            "current_price": float(current['close']),
-                            "strength": "high"
-                        }
+                            "current_price": float(current["close"]),
+                            "strength": "high",
+                        },
                     }
                 )
 
@@ -1866,8 +1891,8 @@ class LLMSmartStrategy(TradingStrategy):
                             "indicator": "MA_GOLDEN_CROSS",
                             "ma_short": float(current[ma_short_key]),
                             "ma_long": float(current[ma_long_key]),
-                            "strength": "medium"
-                        }
+                            "strength": "medium",
+                        },
                     }
                 )
             elif (
@@ -1883,8 +1908,8 @@ class LLMSmartStrategy(TradingStrategy):
                             "indicator": "MA_DEATH_CROSS",
                             "ma_short": float(current[ma_short_key]),
                             "ma_long": float(current[ma_long_key]),
-                            "strength": "medium"
-                        }
+                            "strength": "medium",
+                        },
                     }
                 )
 
@@ -1901,8 +1926,8 @@ class LLMSmartStrategy(TradingStrategy):
                             "indicator": "LARGE_DROP",
                             "daily_return": float(daily_return),
                             "magnitude": float(abs(daily_return)),
-                            "strength": "high"
-                        }
+                            "strength": "high",
+                        },
                     }
                 )
             elif daily_return >= 0.08:  # 上漲8%以上
@@ -1915,8 +1940,8 @@ class LLMSmartStrategy(TradingStrategy):
                             "indicator": "LARGE_GAIN",
                             "daily_return": float(daily_return),
                             "magnitude": float(daily_return),
-                            "strength": "high"
-                        }
+                            "strength": "high",
+                        },
                     }
                 )
 
@@ -1931,22 +1956,22 @@ class LLMSmartStrategy(TradingStrategy):
                         "indicator": "TREND_TURN_BULLISH",
                         "ma20": float(current["ma_20"]),
                         "ma50": float(current["ma_50"]),
-                        "strength": "medium"
-                    }
+                        "strength": "medium",
+                    },
                 }
             )
         elif current["ma_20"] < current["ma_50"] and prev["ma_20"] >= prev["ma_50"]:
             events.append(
                 {
-                    "event_type": "TREND_TURN_BEARISH", 
+                    "event_type": "TREND_TURN_BEARISH",
                     "severity": "medium",
                     "description": "20日均線下穿50日均線",
                     "technical_data": {
                         "indicator": "TREND_TURN_BEARISH",
                         "ma20": float(current["ma_20"]),
                         "ma50": float(current["ma_50"]),
-                        "strength": "medium"
-                    }
+                        "strength": "medium",
+                    },
                 }
             )
 
@@ -2225,12 +2250,14 @@ class LLMSmartStrategy(TradingStrategy):
             print(f"📊 準備上下文數據完成")
 
             # 生成全面的技術分析上下文
-            current_date_str = current_date.strftime('%Y-%m-%d')
-            comprehensive_context = self.enhanced_analyzer.analyze_comprehensive_context(
-                data, current_date_str, lookback_days=10
+            current_date_str = current_date.strftime("%Y-%m-%d")
+            comprehensive_context = (
+                self.enhanced_analyzer.analyze_comprehensive_context(
+                    data, current_date_str, lookback_days=10
+                )
             )
             print(f"🔬 全面技術分析完成")
-            
+
             # 儲存全面技術分析上下文供日誌記錄使用
             self.current_comprehensive_context = comprehensive_context
 
@@ -2348,75 +2375,75 @@ class LLMSmartStrategy(TradingStrategy):
             prompt += f"- {event['event_type']}: {event['description']} (嚴重性: {event['severity']})\n"
 
         # 添加全面的技術分析上下文
-        if comprehensive_context and not comprehensive_context.get('error'):
+        if comprehensive_context and not comprehensive_context.get("error"):
             prompt += f"""
 ## 📊 全面技術分析
 
 ### 💰 價格行為分析
-- 價格變化: {comprehensive_context.get('price_action', {}).get('price_change_pct', 0):.2f}%
-- K線型態: {comprehensive_context.get('price_action', {}).get('candle_type', 'unknown')}
-- 實體比例: {comprehensive_context.get('price_action', {}).get('body_ratio', 0):.2f}
-- 成交量比值: {comprehensive_context.get('price_action', {}).get('volume_to_avg_ratio', 1):.2f}倍
-- 跳空: {comprehensive_context.get('price_action', {}).get('gap_pct', 0):.2f}%
+- 價格變化: {comprehensive_context.get("price_action", {}).get("price_change_pct", 0):.2f}%
+- K線型態: {comprehensive_context.get("price_action", {}).get("candle_type", "unknown")}
+- 實體比例: {comprehensive_context.get("price_action", {}).get("body_ratio", 0):.2f}
+- 成交量比值: {comprehensive_context.get("price_action", {}).get("volume_to_avg_ratio", 1):.2f}倍
+- 跳空: {comprehensive_context.get("price_action", {}).get("gap_pct", 0):.2f}%
 
 ### 📈 移動平均線分析
-- MA5: ${comprehensive_context.get('moving_averages', {}).get('ma_5', 0):.2f} (斜率: {comprehensive_context.get('moving_averages', {}).get('ma_5_slope', 0):.4f})
-- MA10: ${comprehensive_context.get('moving_averages', {}).get('ma_10', 0):.2f} (斜率: {comprehensive_context.get('moving_averages', {}).get('ma_10_slope', 0):.4f})
-- MA20: ${comprehensive_context.get('moving_averages', {}).get('ma_20', 0):.2f} (斜率: {comprehensive_context.get('moving_averages', {}).get('ma_20_slope', 0):.4f})
-- 均線排列: {comprehensive_context.get('moving_averages', {}).get('ma_alignment', 'unknown')}
-- 位於所有均線之上: {comprehensive_context.get('moving_averages', {}).get('above_all_mas', False)}
+- MA5: ${comprehensive_context.get("moving_averages", {}).get("ma_5", 0):.2f} (斜率: {comprehensive_context.get("moving_averages", {}).get("ma_5_slope", 0):.4f})
+- MA10: ${comprehensive_context.get("moving_averages", {}).get("ma_10", 0):.2f} (斜率: {comprehensive_context.get("moving_averages", {}).get("ma_10_slope", 0):.4f})
+- MA20: ${comprehensive_context.get("moving_averages", {}).get("ma_20", 0):.2f} (斜率: {comprehensive_context.get("moving_averages", {}).get("ma_20_slope", 0):.4f})
+- 均線排列: {comprehensive_context.get("moving_averages", {}).get("ma_alignment", "unknown")}
+- 位於所有均線之上: {comprehensive_context.get("moving_averages", {}).get("above_all_mas", False)}
 
 ### 📊 成交量分析
-- 當前成交量: {comprehensive_context.get('volume_analysis', {}).get('current_volume', 0):,}
-- 成交量比值: {comprehensive_context.get('volume_analysis', {}).get('volume_ratio', 1):.2f}倍
-- 成交量趨勢: {comprehensive_context.get('volume_analysis', {}).get('volume_trend', 0):.2f}
-- 是否爆量: {comprehensive_context.get('volume_analysis', {}).get('is_high_volume', False)}
-- 價量配合: {comprehensive_context.get('volume_analysis', {}).get('volume_confirmation', False)}
+- 當前成交量: {comprehensive_context.get("volume_analysis", {}).get("current_volume", 0):,}
+- 成交量比值: {comprehensive_context.get("volume_analysis", {}).get("volume_ratio", 1):.2f}倍
+- 成交量趨勢: {comprehensive_context.get("volume_analysis", {}).get("volume_trend", 0):.2f}
+- 是否爆量: {comprehensive_context.get("volume_analysis", {}).get("is_high_volume", False)}
+- 價量配合: {comprehensive_context.get("volume_analysis", {}).get("volume_confirmation", False)}
 
 ### 🌊 波動性分析
-- ATR: {comprehensive_context.get('volatility_analysis', {}).get('atr', 0):.2f}
-- 年化波動率: {comprehensive_context.get('volatility_analysis', {}).get('volatility_annualized', 0):.2f}%
-- 波動率百分位: {comprehensive_context.get('volatility_analysis', {}).get('volatility_percentile', 50):.1f}%
-- 高波動: {comprehensive_context.get('volatility_analysis', {}).get('is_high_volatility', False)}
+- ATR: {comprehensive_context.get("volatility_analysis", {}).get("atr", 0):.2f}
+- 年化波動率: {comprehensive_context.get("volatility_analysis", {}).get("volatility_annualized", 0):.2f}%
+- 波動率百分位: {comprehensive_context.get("volatility_analysis", {}).get("volatility_percentile", 50):.1f}%
+- 高波動: {comprehensive_context.get("volatility_analysis", {}).get("is_high_volatility", False)}
 
 ### ⚡ 動量指標
-- RSI: {comprehensive_context.get('momentum_indicators', {}).get('rsi', 50):.2f}
-- RSI狀態: {comprehensive_context.get('momentum_indicators', {}).get('rsi_condition', 'neutral')}
-- 5日ROC: {comprehensive_context.get('momentum_indicators', {}).get('roc_5_day', 0):.2f}%
-- 10日ROC: {comprehensive_context.get('momentum_indicators', {}).get('roc_10_day', 0):.2f}%
-- 動量強度: {comprehensive_context.get('momentum_indicators', {}).get('momentum_strength', 'neutral')}
+- RSI: {comprehensive_context.get("momentum_indicators", {}).get("rsi", 50):.2f}
+- RSI狀態: {comprehensive_context.get("momentum_indicators", {}).get("rsi_condition", "neutral")}
+- 5日ROC: {comprehensive_context.get("momentum_indicators", {}).get("roc_5_day", 0):.2f}%
+- 10日ROC: {comprehensive_context.get("momentum_indicators", {}).get("roc_10_day", 0):.2f}%
+- 動量強度: {comprehensive_context.get("momentum_indicators", {}).get("momentum_strength", "neutral")}
 
 ### 🎯 支撐阻力
-- 最近阻力: ${comprehensive_context.get('support_resistance', {}).get('nearest_resistance', 0):.2f}
-- 最近支撐: ${comprehensive_context.get('support_resistance', {}).get('nearest_support', 0):.2f}
-- 距阻力: {comprehensive_context.get('support_resistance', {}).get('resistance_distance_pct', 0):.2f}%
-- 距支撐: {comprehensive_context.get('support_resistance', {}).get('support_distance_pct', 0):.2f}%
-- 接近關鍵位: {comprehensive_context.get('support_resistance', {}).get('near_resistance', False) or comprehensive_context.get('support_resistance', {}).get('near_support', False)}
+- 最近阻力: ${comprehensive_context.get("support_resistance", {}).get("nearest_resistance", 0):.2f}
+- 最近支撐: ${comprehensive_context.get("support_resistance", {}).get("nearest_support", 0):.2f}
+- 距阻力: {comprehensive_context.get("support_resistance", {}).get("resistance_distance_pct", 0):.2f}%
+- 距支撐: {comprehensive_context.get("support_resistance", {}).get("support_distance_pct", 0):.2f}%
+- 接近關鍵位: {comprehensive_context.get("support_resistance", {}).get("near_resistance", False) or comprehensive_context.get("support_resistance", {}).get("near_support", False)}
 
 ### 📐 趨勢強度分析
-- 趨勢方向: {comprehensive_context.get('trend_analysis', {}).get('trend_direction', 'neutral')}
-- 趨勢強度: {comprehensive_context.get('trend_analysis', {}).get('trend_strength', 0):.3f}
-- ADX值: {comprehensive_context.get('trend_analysis', {}).get('adx_value', 0):.2f}
-- 強勢趨勢: {comprehensive_context.get('trend_analysis', {}).get('strong_trend', False)}
+- 趨勢方向: {comprehensive_context.get("trend_analysis", {}).get("trend_direction", "neutral")}
+- 趨勢強度: {comprehensive_context.get("trend_analysis", {}).get("trend_strength", 0):.3f}
+- ADX值: {comprehensive_context.get("trend_analysis", {}).get("adx_value", 0):.2f}
+- 強勢趨勢: {comprehensive_context.get("trend_analysis", {}).get("strong_trend", False)}
 
 ### 🏮 市場狀態
-- 市場型態: {comprehensive_context.get('market_regime', {}).get('market_regime', 'unknown')}
-- 型態描述: {comprehensive_context.get('market_regime', {}).get('regime_description', 'Unknown regime')}
-- 是否趨勢行情: {comprehensive_context.get('market_regime', {}).get('is_trending', False)}
-- 是否高波動: {comprehensive_context.get('market_regime', {}).get('is_volatile', False)}
+- 市場型態: {comprehensive_context.get("market_regime", {}).get("market_regime", "unknown")}
+- 型態描述: {comprehensive_context.get("market_regime", {}).get("regime_description", "Unknown regime")}
+- 是否趨勢行情: {comprehensive_context.get("market_regime", {}).get("is_trending", False)}
+- 是否高波動: {comprehensive_context.get("market_regime", {}).get("is_volatile", False)}
 
 ### 🎈 布林通道分析
-- 布林位置: {comprehensive_context.get('bollinger_analysis', {}).get('bb_position', 0.5):.3f} (0=下軌, 1=上軌)
-- 通道寬度: {comprehensive_context.get('bollinger_analysis', {}).get('bb_width', 0):.2f}%
-- 通道收縮: {comprehensive_context.get('bollinger_analysis', {}).get('is_squeeze', False)}
-- 潛在突破: {comprehensive_context.get('bollinger_analysis', {}).get('potential_breakout', False)}
+- 布林位置: {comprehensive_context.get("bollinger_analysis", {}).get("bb_position", 0.5):.3f} (0=下軌, 1=上軌)
+- 通道寬度: {comprehensive_context.get("bollinger_analysis", {}).get("bb_width", 0):.2f}%
+- 通道收縮: {comprehensive_context.get("bollinger_analysis", {}).get("is_squeeze", False)}
+- 潛在突破: {comprehensive_context.get("bollinger_analysis", {}).get("potential_breakout", False)}
 
 ### 📈 MACD分析
-- MACD線: {comprehensive_context.get('macd_analysis', {}).get('macd_line', 0):.4f}
-- 信號線: {comprehensive_context.get('macd_analysis', {}).get('signal_line', 0):.4f}
-- 柱狀圖: {comprehensive_context.get('macd_analysis', {}).get('histogram', 0):.4f}
-- MACD位置: {comprehensive_context.get('macd_analysis', {}).get('macd_position', 'neutral')}
-- 交叉信號: {comprehensive_context.get('macd_analysis', {}).get('macd_cross', 'none')}
+- MACD線: {comprehensive_context.get("macd_analysis", {}).get("macd_line", 0):.4f}
+- 信號線: {comprehensive_context.get("macd_analysis", {}).get("signal_line", 0):.4f}
+- 柱狀圖: {comprehensive_context.get("macd_analysis", {}).get("histogram", 0):.4f}
+- MACD位置: {comprehensive_context.get("macd_analysis", {}).get("macd_position", "neutral")}
+- 交叉信號: {comprehensive_context.get("macd_analysis", {}).get("macd_cross", "none")}
 """
 
         prompt += f"""
@@ -3166,11 +3193,11 @@ class LLMSmartStrategy(TradingStrategy):
         relevant_events: List[Dict[str, Any]],
         trend_analysis: Any,
         llm_decision: Dict[str, Any] = None,
-        comprehensive_context: Dict[str, Any] = None  # 新增參數
+        comprehensive_context: Dict[str, Any] = None,  # 新增參數
     ):
         """
         記錄每日分析數據到日誌
-        
+
         Args:
             timestamp: 當前時間戳
             historical_data: 歷史數據
@@ -3183,119 +3210,140 @@ class LLMSmartStrategy(TradingStrategy):
         """
         try:
             current_row = historical_data.iloc[i]
-            current_date = timestamp.strftime('%Y-%m-%d')
-            
+            current_date = timestamp.strftime("%Y-%m-%d")
+
             # 準備市場數據
             market_data = {
-                'price': float(current_row.get('close', current_row.get('Close', 0))),
-                'volume': int(current_row.get('volume', current_row.get('Volume', 0))),
-                'high': float(current_row.get('high', current_row.get('High', 0))),
-                'low': float(current_row.get('low', current_row.get('Low', 0))),
-                'open': float(current_row.get('open', current_row.get('Open', 0))),
+                "price": float(current_row.get("close", current_row.get("Close", 0))),
+                "volume": int(current_row.get("volume", current_row.get("Volume", 0))),
+                "high": float(current_row.get("high", current_row.get("High", 0))),
+                "low": float(current_row.get("low", current_row.get("Low", 0))),
+                "open": float(current_row.get("open", current_row.get("Open", 0))),
             }
-            
+
             # 計算日收益率
             if i > 0:
-                prev_close = historical_data.iloc[i-1].get('close', historical_data.iloc[i-1].get('Close', market_data['price']))
-                market_data['daily_return'] = (market_data['price'] - prev_close) / prev_close
+                prev_close = historical_data.iloc[i - 1].get(
+                    "close",
+                    historical_data.iloc[i - 1].get("Close", market_data["price"]),
+                )
+                market_data["daily_return"] = (
+                    market_data["price"] - prev_close
+                ) / prev_close
             else:
-                market_data['daily_return'] = 0.0
-                
+                market_data["daily_return"] = 0.0
+
             # 計算波動率（使用過去10天的標準差）
             if i >= 10:
                 recent_returns = []
-                for j in range(max(0, i-9), i+1):
+                for j in range(max(0, i - 9), i + 1):
                     if j > 0:
-                        curr_price = historical_data.iloc[j].get('close', historical_data.iloc[j].get('Close', 0))
-                        prev_price = historical_data.iloc[j-1].get('close', historical_data.iloc[j-1].get('Close', curr_price))
+                        curr_price = historical_data.iloc[j].get(
+                            "close", historical_data.iloc[j].get("Close", 0)
+                        )
+                        prev_price = historical_data.iloc[j - 1].get(
+                            "close",
+                            historical_data.iloc[j - 1].get("Close", curr_price),
+                        )
                         if prev_price > 0:
                             daily_ret = (curr_price - prev_price) / prev_price
                             recent_returns.append(daily_ret)
-                
+
                 if recent_returns:
                     import numpy as np
-                    market_data['volatility'] = float(np.std(recent_returns))
+
+                    market_data["volatility"] = float(np.std(recent_returns))
                 else:
-                    market_data['volatility'] = 0.0
+                    market_data["volatility"] = 0.0
             else:
-                market_data['volatility'] = 0.0
-            
+                market_data["volatility"] = 0.0
+
             # 準備趨勢分析數據
             trend_data = None
             if trend_analysis:
                 trend_data = {
-                    'short_term': getattr(trend_analysis, 'short_term_trend', 'neutral'),
-                    'medium_term': getattr(trend_analysis, 'medium_term_trend', 'neutral'),
-                    'long_term': getattr(trend_analysis, 'dominant_trend', 'neutral'),
-                    'trend_strength': getattr(trend_analysis, 'trend_strength', 0.5),
-                    'confidence': getattr(trend_analysis, 'confidence', 0.5),
+                    "short_term": getattr(
+                        trend_analysis, "short_term_trend", "neutral"
+                    ),
+                    "medium_term": getattr(
+                        trend_analysis, "medium_term_trend", "neutral"
+                    ),
+                    "long_term": getattr(trend_analysis, "dominant_trend", "neutral"),
+                    "trend_strength": getattr(trend_analysis, "trend_strength", 0.5),
+                    "confidence": getattr(trend_analysis, "confidence", 0.5),
                 }
-                
+
                 # 添加支撑阻力位信息
-                if hasattr(trend_analysis, 'support_resistance'):
+                if hasattr(trend_analysis, "support_resistance"):
                     sr = trend_analysis.support_resistance
-                    trend_data['support_level'] = getattr(sr, 'support', None)
-                    trend_data['resistance_level'] = getattr(sr, 'resistance', None)
-            
+                    trend_data["support_level"] = getattr(sr, "support", None)
+                    trend_data["resistance_level"] = getattr(sr, "resistance", None)
+
             # 準備事件數據
             triggered_events_data = []
             for event in events:
                 event_data = {
-                    'event_type': event.get('type', 'unknown'),
-                    'severity': self._determine_event_severity(event),
-                    'description': event.get('description', f"{event.get('type', 'unknown')} 事件"),
-                    'technical_data': {
-                        'indicator': event.get('indicator', event.get('type')),
-                        'value': event.get('value'),
-                        'threshold': event.get('threshold'),
-                        'strength': event.get('strength', 'medium')
-                    }
+                    "event_type": event.get("type", "unknown"),
+                    "severity": self._determine_event_severity(event),
+                    "description": event.get(
+                        "description", f"{event.get('type', 'unknown')} 事件"
+                    ),
+                    "technical_data": {
+                        "indicator": event.get("indicator", event.get("type")),
+                        "value": event.get("value"),
+                        "threshold": event.get("threshold"),
+                        "strength": event.get("strength", "medium"),
+                    },
                 }
                 triggered_events_data.append(event_data)
-            
+
             # 準備LLM決策數據
             llm_decision_data = None
             if llm_decision:
                 llm_decision_data = {
-                    'decision_made': True,
-                    'prompt_version': self.strategy_type,
-                    'decision_type': llm_decision.get('action', 'HOLD'),
-                    'confidence': llm_decision.get('confidence', 0.0),
-                    'reasoning': llm_decision.get('reasoning', ''),
-                    'key_factors': llm_decision.get('factors', []),
-                    'raw_response': llm_decision.get('raw_response', ''),
+                    "decision_made": True,
+                    "prompt_version": self.strategy_type,
+                    "decision_type": llm_decision.get("action", "HOLD"),
+                    "confidence": llm_decision.get("confidence", 0.0),
+                    "reasoning": llm_decision.get("reasoning", ""),
+                    "key_factors": llm_decision.get("factors", []),
+                    "raw_response": llm_decision.get("raw_response", ""),
                 }
             else:
                 llm_decision_data = {
-                    'decision_made': False,
-                    'reason': 'No significant events or filtered out'
+                    "decision_made": False,
+                    "reason": "No significant events or filtered out",
                 }
-            
+
             # 準備策略狀態數據
             strategy_state_data = {
-                'position': 'long' if self.current_position else 'neutral',
-                'cash': self.cash,
-                'portfolio_value': self.current_portfolio_value,
-                'shares': self.shares,
-                'entry_price': self.position_entry_price if self.current_position else None,
-                'trade_count_today': self.daily_trade_count,
-                'total_trades': self.total_trades,
-                'winning_trades': self.winning_trades,
+                "position": "long" if self.current_position else "neutral",
+                "cash": self.cash,
+                "portfolio_value": self.current_portfolio_value,
+                "shares": self.shares,
+                "entry_price": self.position_entry_price
+                if self.current_position
+                else None,
+                "trade_count_today": self.daily_trade_count,
+                "total_trades": self.total_trades,
+                "winning_trades": self.winning_trades,
             }
-            
+
             # 計算當前損益
             if self.current_position and self.shares > 0:
-                current_value = self.shares * market_data['price']
+                current_value = self.shares * market_data["price"]
                 entry_value = self.shares * self.position_entry_price
-                strategy_state_data['unrealized_pnl'] = current_value - entry_value
-                strategy_state_data['unrealized_pnl_pct'] = (current_value - entry_value) / entry_value
+                strategy_state_data["unrealized_pnl"] = current_value - entry_value
+                strategy_state_data["unrealized_pnl_pct"] = (
+                    current_value - entry_value
+                ) / entry_value
             else:
-                strategy_state_data['unrealized_pnl'] = 0.0
-                strategy_state_data['unrealized_pnl_pct'] = 0.0
-            
+                strategy_state_data["unrealized_pnl"] = 0.0
+                strategy_state_data["unrealized_pnl_pct"] = 0.0
+
             # 記錄到日誌
             log_id = self.backtest_logger.log_daily_analysis(
-                symbol=self.current_symbol or 'UNKNOWN',
+                symbol=self.current_symbol or "UNKNOWN",
                 date=current_date,
                 market_data=market_data,
                 trend_analysis=trend_data,
@@ -3303,137 +3351,151 @@ class LLMSmartStrategy(TradingStrategy):
                 triggered_events=triggered_events_data,
                 llm_decision=llm_decision_data,
                 trading_signal=None,  # 會在生成信號時單獨更新
-                strategy_state=strategy_state_data
+                strategy_state=strategy_state_data,
             )
-            
+
             # 記錄個別事件分析
             for event in events:
-                if event.get('type'):  # 確保事件有類型
+                if event.get("type"):  # 確保事件有類型
                     self.backtest_logger.log_event_analysis(
                         daily_log_id=log_id,
-                        event_type=event.get('type'),
+                        event_type=event.get("type"),
                         severity=self._determine_event_severity(event),
                         market_context={
-                            'price_before': market_data['price'],
-                            'volume': market_data['volume'],
-                            'trend': trend_data.get('short_term', 'neutral') if trend_data else 'neutral'
+                            "price_before": market_data["price"],
+                            "volume": market_data["volume"],
+                            "trend": trend_data.get("short_term", "neutral")
+                            if trend_data
+                            else "neutral",
                         },
                         llm_response={
-                            'triggered_decision': llm_decision is not None,
-                            'action_taken': llm_decision.get('action', 'HOLD') if llm_decision else 'NONE',
-                            'confidence': llm_decision.get('confidence', 0.0) if llm_decision else 0.0
-                        }
+                            "triggered_decision": llm_decision is not None,
+                            "action_taken": llm_decision.get("action", "HOLD")
+                            if llm_decision
+                            else "NONE",
+                            "confidence": llm_decision.get("confidence", 0.0)
+                            if llm_decision
+                            else 0.0,
+                        },
                     )
-            
+
             logger.debug(f"✅ 已記錄 {current_date} 的分析數據 (log_id: {log_id})")
-            
+
         except Exception as e:
             logger.error(f"❌ 記錄日誌失敗: {e}")
             import traceback
+
             traceback.print_exc()
-    
+
     def _determine_event_severity(self, event: Dict[str, Any]) -> str:
         """
         判斷事件嚴重程度
-        
+
         Args:
             event: 事件字典
-            
+
         Returns:
             嚴重程度: 'high', 'medium', 'low'
         """
-        event_type = event.get('type', '').lower()
-        strength = event.get('strength', 'medium').lower()
-        
+        event_type = event.get("type", "").lower()
+        strength = event.get("strength", "medium").lower()
+
         # 根據事件類型和強度判斷嚴重程度
-        if strength == 'high' or event_type in ['large_drop', 'large_gain', 'volume_spike']:
-            return 'high'
-        elif strength == 'low' or event_type in ['minor_support', 'minor_resistance']:
-            return 'low'
+        if strength == "high" or event_type in [
+            "large_drop",
+            "large_gain",
+            "volume_spike",
+        ]:
+            return "high"
+        elif strength == "low" or event_type in ["minor_support", "minor_resistance"]:
+            return "low"
         else:
-            return 'medium'
-    
+            return "medium"
+
     def _log_trading_signal(
         self,
         timestamp: pd.Timestamp,
-        signal: 'TradingSignal',
-        llm_decision: Dict[str, Any]
+        signal: "TradingSignal",
+        llm_decision: Dict[str, Any],
     ):
         """
         記錄交易信號到日誌
-        
+
         Args:
             timestamp: 信號時間戳
             signal: 交易信號對象
             llm_decision: LLM決策結果
         """
         try:
-            current_date = timestamp.strftime('%Y-%m-%d')
-            
+            current_date = timestamp.strftime("%Y-%m-%d")
+
             # 查找當天的日誌記錄
             recent_logs = self.backtest_logger.query_logs(
                 symbol=self.current_symbol,
                 date_from=current_date,
                 date_to=current_date,
-                limit=1
+                limit=1,
             )
-            
+
             if recent_logs:
-                log_id = recent_logs[0]['id']
-                
+                log_id = recent_logs[0]["id"]
+
                 # 準備交易信號數據
                 signal_data = {
-                    'signal_type': signal.signal_type.name,
-                    'price': signal.price,
-                    'quantity': signal.quantity,
-                    'confidence': signal.confidence,
-                    'reasoning': signal.reason,
-                    'stop_loss': signal.stop_loss,
-                    'take_profit': signal.take_profit,
-                    'timestamp': timestamp.isoformat(),
-                    'llm_factors': llm_decision.get('factors', []),
-                    'llm_confidence': llm_decision.get('confidence', 0.0)
+                    "signal_type": signal.signal_type.name,
+                    "price": signal.price,
+                    "quantity": signal.quantity,
+                    "confidence": signal.confidence,
+                    "reasoning": signal.reason,
+                    "stop_loss": signal.stop_loss,
+                    "take_profit": signal.take_profit,
+                    "timestamp": timestamp.isoformat(),
+                    "llm_factors": llm_decision.get("factors", []),
+                    "llm_confidence": llm_decision.get("confidence", 0.0),
                 }
-                
+
                 # 更新當天的記錄
                 with sqlite3.connect(self.backtest_logger.db_path) as conn:
-                    conn.execute("""
+                    conn.execute(
+                        """
                         UPDATE daily_analysis_logs 
                         SET trading_signal = ?
                         WHERE id = ?
-                    """, (json.dumps(signal_data), log_id))
-                
+                    """,
+                        (json.dumps(signal_data), log_id),
+                    )
+
                 logger.debug(f"✅ 已更新交易信號日誌 (log_id: {log_id})")
-            
+
         except Exception as e:
             logger.error(f"❌ 記錄交易信號失敗: {e}")
-    
+
     def get_backtest_summary(self) -> Dict[str, Any]:
         """
         獲取回測摘要
-        
+
         Returns:
             回測摘要數據
         """
         if not self.backtest_logger:
             return {}
-        
+
         return self.backtest_logger.get_session_summary()
-    
+
     def export_backtest_logs(self, filepath: str = None):
         """
         導出回測日誌
-        
+
         Args:
             filepath: 導出文件路徑，如果不提供則使用默認路徑
         """
         if not self.backtest_logger:
             logger.warning("日誌記錄器未啟用，無法導出")
             return
-        
+
         if not filepath:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filepath = f"backtest_logs_{self.current_symbol}_{timestamp}.json"
-        
+
         self.backtest_logger.export_to_json(filepath)
         return filepath

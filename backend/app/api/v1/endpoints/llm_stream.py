@@ -168,7 +168,9 @@ async def stream_llm_backtest(
                             "progress_callback": progress_callback,
                             # Enable backtest logging
                             "enable_logging": True,
-                            "log_path": os.path.join("backend", "data", "backtest_logs.db"),
+                            "log_path": os.path.join(
+                                "backend", "data", "backtest_logs.db"
+                            ),
                             "session_id": f"api_session_{symbol}_{int(time.time())}",
                         },
                     )
@@ -227,7 +229,7 @@ async def stream_llm_backtest(
                             decision = log_entry.get("decision", {})
                             if decision is None:
                                 decision = {}
-                            
+
                             llm_decisions.append(
                                 {
                                     "timestamp": log_entry["date"].isoformat()

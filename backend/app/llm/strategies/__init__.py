@@ -46,9 +46,9 @@ from .base import (
 # )
 # from .llm_decision_engine import LLMDecisionEngine
 # from .llm_smart_strategy import LLMSmartStrategy
-
 # 原有策略 (向後兼容)
 from .llm_strategy import LLMSmartStrategy as LLMStrategyLegacy
+
 # from .performance_tracker import PerformanceTracker
 # from .position_manager import PositionManager
 # from .risk_manager import RiskManager
@@ -58,7 +58,7 @@ from .llm_strategy import LLMSmartStrategy as LLMStrategyLegacy
 __all__ = [
     # Base Classes
     "ParameterSpec",
-    "ParameterType", 
+    "ParameterType",
     "SignalType",
     "StrategyConfig",
     "TradingSignal",
@@ -70,7 +70,7 @@ __all__ = [
     # "LLMSmartStrategy",
     # 核心模塊 (暫時註解，因為模塊已移除)
     # "LLMDecisionEngine",
-    # "RiskManager", 
+    # "RiskManager",
     # "PositionManager",
     # "StockCharacteristicsAnalyzer",
     # "TradingEventDetector",
@@ -81,7 +81,7 @@ __all__ = [
     # "TechnicalParameters",
     # "PositionMetrics",
     # "PnLInsights",
-    # "PerformanceMetrics", 
+    # "PerformanceMetrics",
     # "DecisionContext",
     # "LLMDecision",
     # "TradingSignalRequest",
