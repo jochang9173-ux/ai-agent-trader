@@ -10,7 +10,7 @@ import pandas as pd
 
 
 def calculate_moving_averages(
-    df: pd.DataFrame, short_window: int = 10, long_window: int = 120
+    df: pd.DataFrame, short_window: int = 10, long_window: int = 20
 ) -> pd.DataFrame:
     """Calculate moving averages for a DataFrame"""
     df = df.copy()
