@@ -10,12 +10,12 @@ import pandas as pd
 
 
 def calculate_moving_averages(
-    df: pd.DataFrame, short_window: int = 10, long_window: int = 20
+    df: pd.DataFrame, short_window: int = 10, long_window: int = 60 # ✅ MPT 修正: 20 -> 60
 ) -> pd.DataFrame:
     """Calculate moving averages for a DataFrame"""
     df = df.copy()
     df["ma_10"] = df["close"].rolling(window=short_window).mean()
-    df["ma_20"] = df["close"].rolling(window=long_window).mean()
+    df["ma_60"] = df["close"].rolling(window=long_window).mean() # 修正: 長期均線計算
     df["ma_5"] = df["close"].rolling(window=5).mean()
     return df
 
