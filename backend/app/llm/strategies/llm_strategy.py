@@ -3094,20 +3094,20 @@ class LLMSmartStrategy(TradingStrategy):
         - 中短期交易策略
         """
 
-    @classmethod
+   @classmethod
     def get_default_config(cls) -> StrategyConfig:
         """返回預設配置"""
         return StrategyConfig(
             name="LLM智能策略",
             description="基於股性分析的自適應LLM交易策略，自動優化技術指標參數",
             parameters={
-                "confidence_threshold": 0.6,  # 降低閾值讓更多信號通過
+                "confidence_threshold": 0.6,
                 "trend_lookback": 20,
                 "event_threshold": 0.05,
                 "max_daily_trades": 3,
                 "use_technical_filter": True,
-                "ma_short": 10,  # 基準值，實際使用時會根據股性調整
-                "ma_long": 20,  # 基準值，實際使用時會根據股性調整
+                "ma_short": 10,
+                "ma_long": 60,   # ✅ 修正: 長期均線基準改為 60 天
             },
             parameter_specs={
                 "confidence_threshold": ParameterSpec(
@@ -3115,7 +3115,7 @@ class LLMSmartStrategy(TradingStrategy):
                     display_name="LLM信心度閾值",
                     description="LLM決策的最低信心度要求",
                     param_type=ParameterType.FLOAT,
-                    default_value=0.6,  # 降低預設值
+                    default_value=0.6,
                     min_value=0.3,
                     max_value=0.95,
                     step=0.05,
@@ -3172,16 +3172,17 @@ class LLMSmartStrategy(TradingStrategy):
                     display_name="長期均線基準",
                     description="長期移動平均線基準週期（實際使用時會根據股票反轉頻率自動調整）",
                     param_type=ParameterType.INTEGER,
-                    default_value=20,
-                    min_value=15,
-                    max_value=50,
-                    step=1,
+                    default_value=60,  # ✅ 修正: 預設值改為 60
+                    min_value=30,      # ✅ 修正: 最小值改為 30
+                    max_value=120,     # ✅ 修正: 最大值擴展到 120
+                    step=5,
                 ),
             },
             risk_level="medium",
             market_type="all",
             strategy_type="ai_adaptive",
             category="intelligent",
+        )
         )
 
     def _log_daily_analysis(
