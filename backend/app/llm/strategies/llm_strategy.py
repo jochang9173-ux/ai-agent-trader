@@ -2565,7 +2565,7 @@ class LLMSmartStrategy(TradingStrategy):
         if action not in ["BUY", "SELL"]:
             return None
 
-        # 額外風險檢查：阻止明顯不利的進場
+        # 額外風險檢查：阻止明顯不利的進場 (保持原有的風險過濾邏輯)
         if (
             action == "BUY"
             and hasattr(self, "_last_trend_analysis")
@@ -2607,6 +2607,7 @@ class LLMSmartStrategy(TradingStrategy):
                 # 降低信心度
                 decision["confidence"] = min(decision.get("confidence", 0.5), 0.75)
 
+
         signal_type = SignalType.BUY if action == "BUY" else SignalType.SELL
         confidence = decision.get("confidence", 0.5)
         reasoning = decision.get("reasoning", "")
@@ -2615,39 +2616,68 @@ class LLMSmartStrategy(TradingStrategy):
         if hasattr(self, "pnl_tracker") and self.pnl_tracker:
             try:
                 if action == "BUY" and not self.current_position:
-                    # 固定1000股
-                    shares_to_buy = 1000
-                    cost = shares_to_buy * price
+                    # ✅ MPT 修正：動態倉位計算 (使用信心度和可用現金)
 
-                    print(f"🎯 固定倉位: 買入 {shares_to_buy} 股")
+                    # 1. 計算基於信心的資金比例：將 LLM 信心度轉化為資金分配比例
+                    confidence_threshold = self.confidence_threshold
+                    
+                    # 獲取信心度，確保其在 [0, 1] 之間
+                    
+                    # 調整因子: 讓信心度越高，分配的資金越多。
+                    # 公式: target_allocation = (基礎倉位) + (信心度溢價)
+                    # 基礎倉位設為 5%，信心度溢價最高可達 25% (總計 30% 資金上限)
+                    adjusted_confidence = max(0, confidence - confidence_threshold)
+                    target_allocation = min(
+                        0.30,  # 限制最大倉位為總資金的 30% (風險控制)
+                        0.05 + adjusted_confidence * 0.5 # 0.05為最低分配比例，0.5為調整因子
+                    ) 
+                    
+                    # 2. 計算目標股數
+                    target_cash_allocation = self.cash * target_allocation
+                    
+                    if price <= 0:
+                        print("⚠️ 價格無效，無法計算倉位。)
+                        return None
+                        
+                    # 買入股數 = (目標資金 / 價格) 四捨五入取整
+                    shares_to_buy = int(target_cash_allocation // price) 
 
-                    # 確保有足夠現金
+                    if shares_to_buy <= 0:
+                         print("⚠️ LLM信心度不足或資金量過低，無法買入任何股份。")
+                         return None
+
+                    trade_value = shares_to_buy * price
+                    # 使用一個預設的交易成本 (可從 BacktestConfig 傳入，這裡暫用 0.0015)
+                    transaction_cost = 0.0015
+                    cost = trade_value * (1 + transaction_cost)
+
+
                     if cost <= self.cash:
-                        # 添加新持倉到P&L追蹤器
-                        if self.current_symbol:
-                            self.current_position_id = self.pnl_tracker.add_position(
-                                self.current_symbol,
-                                timestamp.strftime("%Y-%m-%d"),
-                                price,
-                                shares_to_buy,
-                                confidence,
-                            )
+                        
+                        # --- 執行交易和狀態更新 ---
+                        
+                        self.current_position_id = self.pnl_tracker.add_position(
+                            self.current_symbol,
+                            timestamp.strftime("%Y-%m-%d"),
+                            price,
+                            shares_to_buy, # ✅ 使用動態計算的股數
+                            confidence,
+                        )
 
                         # 更新內部持倉狀態
                         self.current_position = "long"
                         self.position_entry_price = price
                         self.position_entry_date = timestamp
-                        self.shares = shares_to_buy
+                        self.shares = shares_to_buy # ✅ 使用動態計算的股數
                         self.cash -= cost
 
-                        # 使用固定止損比例 (5%)
-                        stop_loss_price = price * 0.95
-
-                        print(
-                            f"📈 持倉更新: 買入 {shares_to_buy} 股，價格 ${price:.2f}，總成本 ${cost:,.0f}"
-                        )
+                        # 記錄日誌和止損訊息
+                        print(f"🎯 MPT倉位計算: 信心度{confidence:.2f} -> 資金比例{target_allocation:.1%} -> 買入 {shares_to_buy} 股")
+                        
+                        # 保持原有的 5% 固定止損作為基準
+                        stop_loss_price = price * 0.95 
                         print(f"🛡️ 止損設定: ${stop_loss_price:.2f} (5%止損)")
-
+                        
                         # 立即發送交易後的P&L更新
                         if self.progress_callback:
                             try:
@@ -2660,10 +2690,8 @@ class LLMSmartStrategy(TradingStrategy):
                             except Exception as e:
                                 print(f"⚠️ 買入後P&L更新失敗: {e}")
                     else:
-                        print(
-                            f"⚠️ 現金不足，無法買入{shares_to_buy}股 (需要 ${cost:,.0f}，現有 ${self.cash:,.0f})"
-                        )
-                        return None  # 資金不足時不產生信號
+                        print(f"⚠️ 現金不足，無法買入{shares_to_buy}股 (需要 ${cost:,.0f}，現有 ${self.cash:,.0f})")
+                        return None
 
                 elif action == "SELL" and self.current_position and self.shares > 0:
                     # 賣出所有持股
@@ -2740,8 +2768,11 @@ class LLMSmartStrategy(TradingStrategy):
                         except Exception as e:
                             print(f"⚠️ 賣出後P&L更新失敗: {e}")
 
+                else:
+                    return None
             except Exception as e:
                 print(f"⚠️ 持倉狀態更新失敗: {e}")
+                return None
 
         return TradingSignal(
             timestamp=timestamp,
@@ -2756,7 +2787,7 @@ class LLMSmartStrategy(TradingStrategy):
                 "position_size": getattr(self, "shares", 0),
                 "cash_remaining": getattr(self, "cash", 0),
             },
-        )
+         )
 
     # 輔助方法（計算股票特性）
     def _calculate_trend_consistency(self, data: pd.DataFrame) -> float:
